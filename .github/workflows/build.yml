@@ -1,0 +1,41 @@
+name: Build and Deploy Newsletter
+
+on:
+  push:
+    paths:
+      - 'data.json'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Run build
+        run: node build.js data.json
+
+      - name: Find generated HTML
+        id: find
+        run: |
+          HTML=$(ls NewsPraVoce-DPSP-*.html 2>/dev/null | head -n 1)
+          if [ -z "$HTML" ]; then
+            echo "HTML não encontrado"
+            exit 1
+          fi
+          echo "file=$HTML" >> $GITHUB_OUTPUT
+
+      - name: Upload to FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: ${{ secrets.FTP_TARGET_DIR }}
+          dangerous-clean-slate: false
+          exclude: |
+            **/*
+            !${{ steps.find.outputs.file }}
