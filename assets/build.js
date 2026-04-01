@@ -1,16 +1,26 @@
 const fs = require('fs');
+const path = require('path');
 
-// 📁 arquivos locais
-const data = require('./data.json');
-const colors = require('./colors.json');
-const ctas = require('./ctas.json');
-const editorias = require('./editorias.json');
-
-// 📄 html base
-let html = fs.readFileSync('./template.html', 'utf-8');
+// URL base dos arquivos fixos no GitHub (substitua pelo seu usuário e repo)
+const BASE_URL = 'https://raw.githubusercontent.com/maroAlmeida/news-vc/main/assets/';
 
 // =========================
-// 🔹 FUNÇÃO: gera bloco da imagem do item (com ou sem link)
+// 🔹 FUNÇÕES DE FETCH
+// =========================
+async function fetchJSON(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Erro ao buscar ${url}: ${response.status}`);
+  return response.json();
+}
+
+async function fetchText(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Erro ao buscar ${url}: ${response.status}`);
+  return response.text();
+}
+
+// =========================
+// 🔹 FUNÇÕES AUXILIARES (renderItens, generateImageCell, generateBannerBlock)
 // =========================
 function generateImageCell(item, link) {
   const imgTag = `<img width="110" height="110" alt="{item-tit}" title="{item-tit}"
@@ -18,23 +28,19 @@ function generateImageCell(item, link) {
     style="width:110px;height:110px;max-height:110px;max-width:110px;display:block;margin:auto;object-fit:cover;border:0;outline:none;text-decoration:none;"
   />`;
 
-  // Se img_link for true e o link for válido (diferente de "false"), envolve com <a>
   let inner = imgTag;
   if (item.img_link === true && link !== undefined && link !== null && link !== 'false') {
     inner = `<a href="${link}" style="mso-line-height-rule:exactly;text-decoration:none;display:block">${imgTag}</a>`;
   }
 
-  return `<td height="110px" valign="top" width="110px" align="left" style="padding:0;Margin:0">\n  ${inner}\n</td>`;
+  return `<td height="110px" valign="top" width="110px" align="left" style="padding:0;Margin:0">\n  ${inner}\n<\/td>`;
 }
 
-// =========================
-// 🔹 FUNÇÃO: render itens de um tema
-// =========================
 function renderItens(template, itens, colorConfig) {
   return itens.map(item => {
     let bloco = template;
 
-    // ----- 1. Substitui a célula da imagem (regex captura o bloco original) -----
+    // Substitui célula da imagem
     const imageCellRegex = /<td height="110px" valign="top" width="110px" align="left" style="padding:0;Margin:0">\s*<img[^>]*\/>\s*<\/td>/;
     const match = bloco.match(imageCellRegex);
     if (match) {
@@ -42,26 +48,20 @@ function renderItens(template, itens, colorConfig) {
       bloco = bloco.replace(match[0], newImageCell);
     }
 
-    // ----- 2. Substituições de conteúdo -----
     bloco = bloco.replace(/{item-img}/g, item.img || '');
     bloco = bloco.replace(/{item-tit}/g, item.tit || '');
     bloco = bloco.replace(/{item-txt}/g, item.txt || '');
 
-    // ----- 3. CTA -----
-    // CTA existe se cta != "false" e chave existe em ctas com valor não vazio
     const ctaKey = (item.cta && item.cta !== 'false') ? item.cta : null;
     const hasValidCta = ctaKey && ctas[ctaKey] && ctas[ctaKey] !== '';
 
     if (hasValidCta) {
-      // Substitui o link e a imagem do CTA
       bloco = bloco.replace(/{item-link}/g, item.link || '#');
       bloco = bloco.replace(/{item-cta}/g, ctas[ctaKey]);
     } else {
-      // Remove todo o bloco CTA
       bloco = bloco.replace(/<!-- CTA:start -->([\s\S]*?)<!-- CTA:end -->/g, '');
     }
 
-    // ----- 4. Cores -----
     bloco = bloco.replace(/{tema-tit-color}/g, colorConfig.titColor);
     bloco = bloco.replace(/{tema-txt-color}/g, colorConfig.txtColor);
 
@@ -69,129 +69,86 @@ function renderItens(template, itens, colorConfig) {
   }).join('');
 }
 
-// =========================
-// 🔹 FUNÇÃO: gera bloco do banner (com ou sem link)
-// =========================
 function generateBannerBlock(banner) {
   if (!banner) return '';
-
   const { img, tit, link } = banner;
-
-  // Sem link apenas se link for a string "false"
   const hasLink = (link && link !== 'false');
+  const imgTag = `<img src="${img}" title="${tit}" alt="${tit}" width="100%" style="display:block;font-size:14px;border:0;outline:none;text-decoration:none;margin:0;height:auto;width:100%;max-width:600px;" />`;
 
   if (hasLink) {
-    return `
-      <tr>
-        <td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden">
-          <a href="${link}" style="mso-line-height-rule:exactly;text-decoration:none;display:block;">
-            <img src="${img}" title="${tit}" alt="${tit}" width="100%" style="display:block;font-size:14px;border:0;outline:none;text-decoration:none;margin:0;height:auto;width:100%;max-width:600px;" />
-          </a>
-        </td>
-      </tr>
-    `;
+    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden"><a href="${link}" style="mso-line-height-rule:exactly;text-decoration:none;display:block;">${imgTag}</a></td></tr>`;
   } else {
-    return `
-      <tr>
-        <td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden">
-          <img src="${img}" title="${tit}" alt="${tit}" width="100%" style="display:block;font-size:14px;border:0;outline:none;text-decoration:none;margin:0;height:auto;width:100%;max-width:600px;" />
-        </td>
-      </tr>
-    `;
+    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden">${imgTag}</td></tr>`;
   }
 }
 
 // =========================
-// 🔹 LOOP PRINCIPAL (temas)
+// 🔹 FLUXO PRINCIPAL (async)
 // =========================
+(async () => {
+  try {
+    // 1. Obter caminho do data.json via argumento
+    const dataFilePath = process.argv[2];
+    if (!dataFilePath) {
+      throw new Error('❌ Informe o caminho do arquivo data.json (ex: node build.js editions/3103/data.json)');
+    }
+    const data = JSON.parse(fs.readFileSync(dataFilePath, 'utf-8'));
 
-try {
-  // Substitui placeholder do banner
-  const bannerBlock = generateBannerBlock(data.banner);
-  html = html.replace('{banner-block}', bannerBlock);
+    // 2. Buscar arquivos fixos hospedados
+    const [colors, ctas, editorias, htmlTemplate] = await Promise.all([
+      fetchJSON(`${BASE_URL}colors.json`),
+      fetchJSON(`${BASE_URL}ctas.json`),
+      fetchJSON(`${BASE_URL}editorias.json`),
+      fetchText(`${BASE_URL}template.html`)
+    ]);
 
-  // Localiza o loop dos temas
-  const temaRegex = /<!-- LOOP:temas:start -->([\s\S]*?)<!-- LOOP:temas:end -->/;
-  const temaMatch = html.match(temaRegex);
+    let html = htmlTemplate;
 
-  if (!temaMatch) {
-    throw new Error('❌ LOOP:temas não encontrado no HTML');
-  }
+    // 3. Banner
+    const bannerBlock = generateBannerBlock(data.banner);
+    html = html.replace('{banner-block}', bannerBlock);
 
-  const temaTemplate = temaMatch[1];
+    // 4. Loop dos temas
+    const temaRegex = /<!-- LOOP:temas:start -->([\s\S]*?)<!-- LOOP:temas:end -->/;
+    const temaMatch = html.match(temaRegex);
+    if (!temaMatch) throw new Error('❌ LOOP:temas não encontrado no HTML');
+    const temaTemplate = temaMatch[1];
 
-  const temasRenderizados = Object.entries(data)
-    .filter(([key, tema]) => tema && tema.items && !['banner', 'vigencia'].includes(key))
-    .map(([temaKey, tema]) => {
-      // console.log('------------------------');
-      // console.log('👉 Tema:', temaKey);
-      // console.log('🎨 Cor recebida:', tema.color);
+    const temasRenderizados = Object.entries(data)
+      .filter(([key, tema]) => tema && tema.items && !['banner', 'vigencia'].includes(key))
+      .map(([temaKey, tema]) => {
+        let blocoTema = temaTemplate;
 
-      let blocoTema = temaTemplate;
+        const colorConfig = colors[tema.color] || { bgColor: '#ffffff', titColor: '#000000', txtColor: '#000000' };
+        const abaImg = editorias[tema.aba] || '';
 
-      // Cor com fallback
-      const colorConfig = colors[tema.color] || {
-        bgColor: '#ffffff',
-        titColor: '#000000',
-        txtColor: '#000000'
-      };
+        blocoTema = blocoTema.replace(/{tema-nome}/g, temaKey);
+        blocoTema = blocoTema.replace(/{tema-aba}/g, abaImg);
+        blocoTema = blocoTema.replace(/{tema-bg}/g, colorConfig.bgColor);
 
-      if (!colors[tema.color]) {
-        console.warn(`⚠️ Cor não encontrada: ${tema.color} (tema: ${temaKey})`);
-      }
+        const itensRegex = /<!-- LOOP:itens:start -->([\s\S]*?)<!-- LOOP:itens:end -->/;
+        const itensMatch = blocoTema.match(itensRegex);
+        if (!itensMatch) return blocoTema;
 
-      const abaImg = editorias[tema.aba];
-      if (!abaImg) {
-        console.warn(`⚠️ Aba não encontrada: ${tema.aba} (tema: ${temaKey})`);
-      }
+        const itemTemplate = itensMatch[1];
+        const itensHtml = renderItens(itemTemplate, tema.items || [], colorConfig);
+        blocoTema = blocoTema.replace(itensRegex, itensHtml);
 
-      // dados do tema
-      blocoTema = blocoTema.replace(/{tema-nome}/g, temaKey);
-      blocoTema = blocoTema.replace(/{tema-aba}/g, abaImg || '');
-      blocoTema = blocoTema.replace(/{tema-bg}/g, colorConfig.bgColor);
-
-      // =========================
-      // 🔹 LOOP DE ITENS
-      // =========================
-
-      const itensRegex = /<!-- LOOP:itens:start -->([\s\S]*?)<!-- LOOP:itens:end -->/;
-      const itensMatch = blocoTema.match(itensRegex);
-
-      if (!itensMatch) {
-        console.warn(`⚠️ LOOP:itens não encontrado em ${temaKey}`);
         return blocoTema;
-      }
+      }).join('');
 
-      const itemTemplate = itensMatch[1];
+    html = html.replace(temaRegex, temasRenderizados);
 
-      const itensHtml = renderItens(
-        itemTemplate,
-        tema.items || [],
-        colorConfig
-      );
+    // 5. Salvar HTML com vigência
+    const vigencia = data.vigencia || '0000';
+    const outputDir = path.dirname(dataFilePath);
+    const outputFile = path.join(outputDir, `NewsPraVoce-DPSP-${vigencia}.html`);
+    fs.writeFileSync(outputFile, html);
 
-      blocoTema = blocoTema.replace(itensRegex, itensHtml);
+    console.log(`✅ Build concluído! Arquivo gerado em ${outputFile}`);
 
-      return blocoTema;
-    }).join('');
-
-  html = html.replace(temaRegex, temasRenderizados);
-
-  // =========================
-  // 🔹 SUBSTITUIÇÕES GLOBAIS (banner já foi tratado)
-  // =========================
-  // (se houver outros placeholders globais, podem ser colocados aqui)
-
-  // =========================
-  // 💾 OUTPUT com vigência
-  // =========================
-  const vigencia = data.vigencia || '0000';
-  fs.writeFileSync(`./NewsPraVoce-DPSP-${vigencia}.html`, html);
-
-  console.log('✅ Build NewsPraVoce finalizado com sucesso!');
-
-} catch (error) {
-  console.error('❌ Erro no build:', error.message);
-  // Opcional: mostrar stack completo para debug
-  // console.error(error.stack);
-}
+  } catch (error) {
+    console.error('❌ Erro no build:', error.message);
+    process.exit(1);
+  }
+})();
