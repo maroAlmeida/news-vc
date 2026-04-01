@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// URL base dos arquivos fixos no GitHub (substitua pelo seu usuário e repo)
+// URL base dos arquivos fixos no GitHub (RAW)
 const BASE_URL = 'https://raw.githubusercontent.com/maroAlmeida/news-vc/main/assets/';
 
 // =========================
@@ -20,7 +20,7 @@ async function fetchText(url) {
 }
 
 // =========================
-// 🔹 FUNÇÕES AUXILIARES (renderItens, generateImageCell, generateBannerBlock)
+// 🔹 FUNÇÕES AUXILIARES (geração do HTML)
 // =========================
 function generateImageCell(item, link) {
   const imgTag = `<img width="110" height="110" alt="{item-tit}" title="{item-tit}"
@@ -36,7 +36,7 @@ function generateImageCell(item, link) {
   return `<td height="110px" valign="top" width="110px" align="left" style="padding:0;Margin:0">\n  ${inner}\n<\/td>`;
 }
 
-function renderItens(template, itens, colorConfig) {
+function renderItens(template, itens, colorConfig, ctas) {
   return itens.map(item => {
     let bloco = template;
 
@@ -76,9 +76,9 @@ function generateBannerBlock(banner) {
   const imgTag = `<img src="${img}" title="${tit}" alt="${tit}" width="100%" style="display:block;font-size:14px;border:0;outline:none;text-decoration:none;margin:0;height:auto;width:100%;max-width:600px;" />`;
 
   if (hasLink) {
-    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden"><a href="${link}" style="mso-line-height-rule:exactly;text-decoration:none;display:block;">${imgTag}</a></td></tr>`;
+    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden"><a href="${link}" style="mso-line-height-rule:exactly;text-decoration:none;display:block;">${imgTag}</a>\\n</td>\\n`;
   } else {
-    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden">${imgTag}</td></tr>`;
+    return `<tr><td bgcolor="#fff" align="center" style="padding:0;Margin:0;margin:0;background-color:#fff;width:100%;max-width:600px;overflow:hidden">${imgTag}\\n</td>\\n`;
   }
 }
 
@@ -90,11 +90,11 @@ function generateBannerBlock(banner) {
     // 1. Obter caminho do data.json via argumento
     const dataFilePath = process.argv[2];
     if (!dataFilePath) {
-      throw new Error('❌ Informe o caminho do arquivo data.json (ex: node build.js editions/3103/data.json)');
+      throw new Error('❌ Informe o caminho do arquivo data.json (ex: node build.js editions/2026/03/3103/data.json)');
     }
     const data = JSON.parse(fs.readFileSync(dataFilePath, 'utf-8'));
 
-    // 2. Buscar arquivos fixos hospedados
+    // 2. Buscar arquivos fixos hospedados no GitHub
     const [colors, ctas, editorias, htmlTemplate] = await Promise.all([
       fetchJSON(`${BASE_URL}colors.json`),
       fetchJSON(`${BASE_URL}ctas.json`),
@@ -131,7 +131,7 @@ function generateBannerBlock(banner) {
         if (!itensMatch) return blocoTema;
 
         const itemTemplate = itensMatch[1];
-        const itensHtml = renderItens(itemTemplate, tema.items || [], colorConfig);
+        const itensHtml = renderItens(itemTemplate, tema.items || [], colorConfig, ctas);
         blocoTema = blocoTema.replace(itensRegex, itensHtml);
 
         return blocoTema;
